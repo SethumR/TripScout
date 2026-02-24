@@ -6,78 +6,41 @@ An AI-powered travel package discovery application that helps users find the per
 
 ### 1. The "Under the Hood" Moment
 
-**Technical Hurdle**: Preventing AI hallucinations and ensuring grounded responses
+**The Problem I Hit**: The AI kept making stuff up. When someone searched for something we didn't have, it would just... invent travel packages. Like if you asked for "snorkeling in Maldives," it would confidently suggest packages that didn't exist in our inventory.
 
-**The Problem**: Initially, when users asked for experiences not in the inventory (e.g., "snorkeling in Maldives"), the AI would sometimes fabricate packages or suggest items with incorrect details.
+**How I Fixed It**:
+First, I made the AI respond in JSON format only - no room for creative writing. Then I added a double-check system: even if the AI suggests something, my code verifies that package ID actually exists in our database before showing it to the user. I also lowered the AI's "creativity" setting (temperature) from the default to 0.1 so it sticks to facts.
 
-**How I Debugged**:
-- Added `response_format: { type: 'json_object' }` to force structured output
-- Created a dual-validation system:
-  1. Zod schema validation on the AI response structure
-  2. Backend filtering to verify all returned IDs exist in inventory
-- Implemented a strict system prompt that lists the exact inventory and explicitly forbids suggesting other destinations
-- Set temperature to 0.1 for more deterministic behavior
-- Added a safeguard in the API route that only returns packages present in our inventory array
-
-**Key Learning**: AI grounding requires both prompt engineering AND programmatic validation layers.
+Basically learned that you can't just trust AI responses blindly - you need guardrails in your code too.
 
 ### 2. The Scalability Thought
 
-**For 50,000 packages**, I would implement:
+Right now we're sending all 5 packages to the AI with every search. That works fine, but with 50,000 packages? That would be way too expensive and slow.
 
-**Hybrid Retrieval Architecture**:
-1. **Vector Embeddings + Semantic Search**:
-   - Pre-compute embeddings for each package (title + tags + location)
-   - Use a vector database (Pinecone, Weaviate, or pgvector)
-   - Perform top-k similarity search (k=20-50) to narrow candidates
-   - Only send top candidates to LLM for final ranking
+**What I'd Do Instead**:
+- Use a vector database to store "embeddings" (fancy word for converting package descriptions into numbers)
+- When someone searches, find the 30-50 packages that are most similar to their query
+- Only send those top candidates to the AI for final ranking
+- Add caching so popular searches ("beach under $100") don't hit the AI every time
 
-2. **Caching Layer**:
-   - Cache embeddings and popular query results in Redis
-   - Implement query normalization to improve cache hits
-   - Cache identical prompts with OpenAI's built-in caching
-
-3. **Cost Optimization**:
-   - Pre-filter by price/tags before LLM call when possible
-   - Use cheaper models (gpt-3.5-turbo) for initial filtering
-   - Only use expensive models (gpt-4) for complex ambiguous queries
-   - Batch similar queries together
-
-4. **Performance**:
-   - Index packages by price ranges, tags, and locations
-   - Implement pagination for results
-   - Use streaming responses for better UX
-   - Add CDN caching for static inventory data
-
-**Estimated Cost**: With vector search, only ~50 packages sent to LLM instead of 50,000, reducing tokens from ~500K to ~5K per query (99% reduction).
+This would cut costs by like 99% because instead of sending 50,000 packages through the AI each time, we'd only send 50. Plus, we could use the cheaper version of GPT for most queries and only use the expensive one when needed.
 
 ### 3. The AI Reflection
 
-**AI Tools Used**: GitHub Copilot, ChatGPT for debugging
+**Tools I Used**: GitHub Copilot and ChatGPT
 
-**Bad Suggestion Instance**:
-
-When implementing the Zod validation, Copilot suggested:
+**When AI Gave Bad Advice**:
+Copilot suggested this code for validation:
 ```typescript
-const validatedResponse = SearchResultSchema.safeParse(parsedResponse);
 if (!validatedResponse.success) {
-  return validatedResponse.data; // ❌ WRONG - data doesn't exist on failure
+  return validatedResponse.data; // This doesn't exist!
 }
 ```
 
-**The Bug**: On validation failure, `validatedResponse.data` is undefined. The correct property is `validatedResponse.error`.
+The problem? When validation fails, there IS no `.data` - that's the whole point of the failure. The app would crash trying to return something that doesn't exist.
 
-**How I Corrected It**:
-```typescript
-const validatedResponse = SearchResultSchema.parse(parsedResponse);
-// parse() throws on failure, which gets caught by try-catch
-// OR use safeParse() and check .success first before accessing .data
-```
+I fixed it by just using `.parse()` which automatically throws an error if validation fails, then my try-catch handles it properly.
 
-I wrapped the validation in a try-catch and return a proper error response with the Zod error details. This taught me to always verify AI-suggested code, especially for error handling paths which AI often gets wrong.
-
-**Another Instance**: AI suggested using `gpt-4` by default, which would be 10x more expensive. I switched to `gpt-3.5-turbo` since the task is straightforward pattern matching, reducing cost from ~$0.02 to ~$0.002 per query.
+**Lesson**: AI is great for boilerplate and common patterns, but it often messes up error handling and edge cases. Always read the code it suggests, especially the parts dealing with what happens when things go wrong.
 
 ---
-
-Built with ❤️ for the TripScout technical assessment.
