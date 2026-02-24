@@ -6,7 +6,7 @@ An AI-powered travel package discovery application that helps users find the per
 
 ### 1. The "Under the Hood" Moment
 
-**The Problem I Hit**: The AI kept making stuff up. When someone searched for something we didn't have, it would just... invent travel packages. Like if you asked for "snorkeling in Maldives," it would confidently suggest packages that didn't exist in our inventory.
+**The Problem I Hit**: The AI kept making stuff up. When someone searched for something we didn't have, it would just invent travel packages. Like if you asked for "snorkeling in Maldives," it would confidently suggest packages that didn't exist in our inventory.
 
 **How I Fixed It**:
 First, I made the AI respond in JSON format only - no room for creative writing. Then I added a double-check system: even if the AI suggests something, my code verifies that package ID actually exists in our database before showing it to the user. I also lowered the AI's "creativity" setting (temperature) from the default to 0.1 so it sticks to facts.
@@ -42,5 +42,3 @@ The problem? When validation fails, there IS no `.data` - that's the whole point
 I fixed it by just using `.parse()` which automatically throws an error if validation fails, then my try-catch handles it properly.
 
 **Lesson**: AI is great for boilerplate and common patterns, but it often messes up error handling and edge cases. Always read the code it suggests, especially the parts dealing with what happens when things go wrong.
-
----
